@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Market & Narrative Pulse</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #F3F4F6; /* Tailwind gray-100 */ color: #1F2937; /* Tailwind gray-800 */ }
+        .card { background-color: #FFFFFF; border-radius: 0.75rem; /* 12px */ box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); padding: 1.5rem; /* 24px */ margin-bottom: 1.5rem; }
+        .card-title { font-size: 1.25rem; /* 20px */ font-weight: 600; color: #111827; /* Tailwind gray-900 */ margin-bottom: 1rem; }
+        .kpi-value { font-size: 2rem; /* 32px */ font-weight: 700; color: #1E40AF; /* Tailwind blue-800 */ line-height: 1.1; }
+        .kpi-label { font-size: 0.875rem; /* 14px */ color: #6B7280; /* Tailwind gray-500 */ margin-top: 0.25rem; }
+        .context-text { font-size: 0.875rem; color: #4B5563; /* Tailwind gray-600 */ line-height: 1.6; margin-top: 0.5rem; }
+        .chart-container { position: relative; width: 100%; max-width: 600px; margin-left: auto; margin-right: auto; height: 280px; }
+        .auth-container { padding: 20px; background-color: #DBEAFE; /* Tailwind blue-100 */ border-radius: 8px; margin-bottom: 20px; text-align: center; }
+        .auth-button { background-color: #1E40AF; /* Tailwind blue-800 */ color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 1rem; }
+        .auth-button:hover { background-color: #1D4ED8; /* Tailwind blue-700 */ }
+        .status-message { margin-top: 10px; font-style: italic; color: #1E3A8A; /* Tailwind blue-900 */ }
+        .trend-arrow-up { color: #10B981; /* Tailwind green-500 */ }
+        .trend-arrow-down { color: #EF4444; /* Tailwind red-500 */ }
+        .trend-arrow-flat { color: #6B7280; /* Tailwind gray-500 */ }
+        .pill { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 500; }
+        .pill-green { background-color: #D1FAE5; color: #065F46; } /* Green 100/800 */
+        .pill-red { background-color: #FEE2E2; color: #991B1B; } /* Red 100/800 */
+        .pill-yellow { background-color: #FEF3C7; color: #92400E; } /* Amber 100/800 */
+        .pill-blue { background-color: #DBEAFE; color: #1E40AF; } /* Blue 100/800 */
+        .pill-gray { background-color: #E5E7EB; color: #374151; } /* Gray 200/700 */
+    </style>
+</head>
+<body class="antialiased text-gray-800">
+    <div class="container mx-auto p-4 md:p-6 lg:p-8">
+        <header class="text-center mb-8 md:mb-12">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Market & Narrative Pulse</h1>
+            <p id="dataDate" class="text-md md:text-lg text-blue-700">As of: Loading...</p>
+        </header>
+
+        <div id="auth-container">
+            <button id="auth-button" class="auth-button">Authorize and Load Data</button>
+            <p id="status" class="status-message">Please authorize to access Google Sheet data.</p>
+        </div>
+
+        <main id="main-content" style="display: none;" class="space-y-8">
+
+            <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="card">
+                    <h2 class="card-title">Macro PCS Outlook (from MacroDaily)</h2>
+                    <div class="text-center space-y-3">
+                        <div>
+                            <p class="kpi-label">Market Status</p>
+                            <p id="md_marketStatus" class="kpi-value text-xl">N/A</p>
+                        </div>
+                        <div>
+                            <p class="kpi-label">Total PCS Score</p>
+                            <div class="w-full bg-gray-200 rounded-full h-8 mt-1">
+                                <div id="md_totalPCSScoreBar" class="h-8 rounded-full text-sm flex items-center justify-center font-semibold text-white bg-blue-600" style="width: 0%;">0</div>
+                            </div>
+                        </div>
+                        <div>
+                            <p class="kpi-label">Recommendation</p>
+                            <p id="md_pcsRecommendation" class="text-xl font-semibold">N/A</p>
+                        </div>
+                    </div>
+                    <p class="context-text">Based on a comprehensive suite of quantitative market indicators.</p>
+                </div>
+
+                <div class="card">
+                    <h2 class="card-title">News Narrative PCS Outlook (from MacroNarrative)</h2>
+                    <div class="text-center space-y-3">
+                        <div>
+                            <p class="kpi-label">Dominant News Sentiment</p>
+                            <p id="mn_dominantNewsSentiment" class="kpi-value text-xl">N/A</p>
+                        </div>
+                        <div>
+                            <p class="kpi-label">News-Adjusted Final PCS Score</p>
+                             <div class="w-full bg-gray-200 rounded-full h-8 mt-1">
+                                <div id="mn_finalPCSScoreBar" class="h-8 rounded-full text-sm flex items-center justify-center font-semibold text-white bg-purple-600" style="width: 0%;">0</div>
+                            </div>
+                        </div>
+                        <div>
+                            <p class="kpi-label">News-Based Signal</p>
+                            <p id="mn_newsPCSSignal" class="text-xl font-semibold">N/A</p>
+                        </div>
+                         <div>
+                            <p class="kpi-label">News Score Contribution</p>
+                            <p id="mn_newsContribution" class="text-lg">N/A</p>
+                        </div>
+                    </div>
+                     <p class="context-text">Reflects how current news flow adjusts the macro outlook.</p>
+                </div>
+            </section>
+
+            <section class="card">
+                <h2 class="card-title">Market Internals & Sentiment</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-center">
+                    <div>
+                        <p class="kpi-label">S&P 500 Close</p>
+                        <p id="md_sp500Close" class="kpi-value">N/A</p>
+                    </div>
+                    <div>
+                        <p class="kpi-label">S&P 500 Pullback</p>
+                        <p id="md_sp500Pullback" class="kpi-value">N/A</p>
+                    </div>
+                    <div>
+                        <p class="kpi-label">VIX Level</p>
+                        <p id="md_vixClose" class="kpi-value">N/A</p>
+                        <p id="md_vixRegime" class="kpi-label text-base font-medium">REGIME: N/A</p>
+                    </div>
+                    <div>
+                        <p class="kpi-label">Volume PCR</p>
+                        <p id="md_pcrVolume" class="kpi-value">N/A</p>
+                        <p id="md_pcrRegime" class="kpi-label text-base font-medium">REGIME: N/A</p>
+                    </div>
+                    <div>
+                        <p class="kpi-label">Market Breadth (Adv %)</p>
+                        <p id="md_advancePct" class="kpi-value">N/A</p>
+                    </div>
+                     <div>
+                        <p class="kpi-label">Sentiment Momentum</p>
+                        <p id="mn_sentimentMomentum" class="kpi-value text-lg">N/A</p>
+                        <p class="context-text text-xs">(From MacroNarrative)</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card">
+                <h2 class="card-title">Economic & Rate Outlook</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-center">
+                    <div>
+                        <p class="kpi-label">10Y Treasury Yield</p>
+                        <p id="md_tnxClose" class="kpi-value">N/A</p>
+                        <p id="md_tnxTrend" class="font-semibold">TREND: N/A</p>
+                    </div>
+                    <div>
+                        <p class="kpi-label">Yield Curve (10Y-2Y)</p>
+                        <p id="md_yieldCurve" class="kpi-value">N/A</p>
+                        <p id="md_yieldCurveDesc" class="context-text text-sm"></p>
+                    </div>
+                    <div>
+                        <p class="kpi-label">Fed Funds Rate</p>
+                        <p id="md_fedFunds" class="kpi-value">N/A</p>
+                    </div>
+                    <div>
+                        <p class="kpi-label">Financial Stress (FSI)</p>
+                        <p id="md_fsi" class="kpi-value">N/A</p>
+                        <p id="md_fsiDesc" class="context-text text-sm"></p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card">
+                <h2 class="card-title">Today's News Narrative Highlights (from MacroNarrative)</h2>
+                <div>
+                    <p class="kpi-label">Key Headlines Influencing Sentiment:</p>
+                    <ul id="mn_topHeadlines" class="list-disc list-inside space-y-1 mt-2 text-sm text-gray-700">
+                        <li>Loading headlines...</li>
+                    </ul>
+                </div>
+                <div class="mt-4">
+                    <p class="kpi-label">News Rationale for PCS Signal:</p>
+                    <p id="mn_pcsRationale" class="context-text italic">Loading rationale...</p>
+                </div>
+                 <div class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-2 text-center">
+                    <div><p class="kpi-label">News Count</p><p id="mn_newsCount" class="font-semibold">N/A</p></div>
+                    <div><p class="kpi-label">Panic</p><p id="mn_panicCount" class="font-semibold">N/A</p></div>
+                    <div><p class="kpi-label">Bearish</p><p id="mn_bearishCount" class="font-semibold">N/A</p></div>
+                    <div><p class="kpi-label">AI Method</p><p id="mn_aiMethod" class="font-semibold text-xs">N/A</p></div>
+                </div>
+            </section>
+
+            <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                 <div class="card">
+                    <h2 class="card-title">S&P 500 Close & Moving Averages</h2>
+                    <div class="chart-container" style="height: 300px;">
+                        <canvas id="sp500Chart"></canvas>
+                    </div>
+                    <p class="context-text mt-2">Current S&P 500 close relative to its 50-day and 200-day moving averages, often key technical levels.</p>
+                </div>
+                <div class="card">
+                    <h2 class="card-title">Indices Pullback Comparison</h2>
+                    <div class="chart-container" style="height: 300px;">
+                        <canvas id="indicesPullbackChart"></canvas>
+                    </div>
+                    <p class="context-text mt-2">Comparing pullbacks from 10-day highs for S&P 500, NASDAQ, Dow Jones, and Russell 2000.</p>
+                </div>
+            </section>
+        </main>
+
+        <footer class="text-center mt-12 py-6 border-t border-gray-300">
+            <p class="text-sm text-gray-600">&copy; <span id="currentYear"></span> Macro & Narrative Insights. Last updated: <span id="lastUpdated">N/A</span></p>
+            <p class="text-xs text-gray-500 mt-1">For informational purposes only. Not financial advice.</p>
+        </footer>
+    </div>
+
+    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+
+    <script>
+        // --- Google API Configuration ---
+        const GOOGLE_API_KEY = 'AIzaSyC9I9vinVaXWwohBWwv1I5HofHKxLtOwuY'; // REPLACE WITH YOUR Google Cloud API Key
+        const GOOGLE_CLIENT_ID = '13112632853-8rs7p0247ec7gneefqducohrvqnm4h97.apps.googleusercontent.com'; // REPLACE WITH YOUR OAuth 2.0 Client ID
+        const DISCOVERY_DOCS = ["https://sheets.googleapis.com/$discovery/rest?version=v4"];
+        const SCOPES = "https://www.googleapis.com/auth/spreadsheets.readonly";
+
+        const SPREADSHEET_ID = '1kKraqxsSWyd-zWnxkxmomNLlYr_t9iJG0EFCnEHT2s8'; // Your Sheet ID
+        const MACRO_DAILY_SHEET_NAME = 'MacroDaily';
+        const MACRO_NARRATIVE_SHEET_NAME = 'MacroNarrative';
+
+        let tokenClient;
+        let gapiInited = false;
+        let gisInited = false;
+        let sp500ChartInstance, indicesPullbackChartInstance;
+
+        document.getElementById('auth-button').addEventListener('click', () => {
+            if (gapiInited && gisInited) {
+                handleAuthClick();
+            } else {
+                updateStatus("API libraries not fully loaded. Please wait or refresh.");
+            }
+        });
+        
+        function gapiLoaded() { gapi.load('client', initializeGapiClient); }
+        function gisLoaded() {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: GOOGLE_CLIENT_ID,
+                scope: SCOPES,
+                callback: '', // Will be set dynamically
+            });
+            gisInited = true;
+            updateStatus("Google Identity Services ready.");
+            maybeEnableAuthButton();
+        }
+
+        async function initializeGapiClient() {
+            try {
+                await gapi.client.init({ apiKey: GOOGLE_API_KEY, discoveryDocs: DISCOVERY_DOCS });
+                gapiInited = true;
+                updateStatus("Google API Client ready.");
+                maybeEnableAuthButton();
+            } catch (err) {
+                updateStatus("Error initializing Google API Client: " + err.message);
+                console.error("Error initializing GAPI client", err);
+            }
+        }
+        
+        function maybeEnableAuthButton() {
+            if (gapiInited && gisInited) {
+                document.getElementById('auth-button').disabled = false;
+                updateStatus("Ready to authorize access to Google Sheets.");
+            }
+        }
+
+        function handleAuthClick() {
+            tokenClient.callback = async (resp) => {
+                if (resp.error !== undefined) {
+                    updateStatus("Auth Error: " + resp.error + ". Ensure pop-ups are allowed and try again.");
+                    console.error("Auth Error", resp);
+                    return; // Stop further processing on auth error
+                }
+                updateStatus("Authorization successful. Fetching data...");
+                document.getElementById('auth-container').style.display = 'none';
+                document.getElementById('main-content').style.display = 'grid'; // Or 'block' if top level is not grid
+                await fetchDataFromSheets();
+            };
+            if (gapi.client.getToken() === null) {
+                tokenClient.requestAccessToken({prompt: 'consent'});
+            } else {
+                tokenClient.requestAccessToken({prompt: ''}); // Skip consent if already authorized
+            }
+        }
+
+        function updateStatus(message) {
+            const statusEl = document.getElementById('status');
+            if (statusEl) statusEl.textContent = message;
+            console.log("Status:", message);
+        }
+
+        async function fetchSheetData(sheetName) {
+            updateStatus(`Workspaceing data from ${sheetName}...`);
+            // Fetch headers
+            const headerResponse = await gapi.client.sheets.spreadsheets.values.get({
+                spreadsheetId: SPREADSHEET_ID,
+                range: `${sheetName}!1:1`,
+            });
+            const headers = headerResponse.result.values ? headerResponse.result.values[0] : [];
+            if (headers.length === 0) {
+                throw new Error(`Could not read headers from ${sheetName}.`);
+            }
+
+            // Fetch all data rows (assuming data is reasonably sized or you want the very last row)
+            // For very large sheets, fetching only the last N rows would be better.
+            // GSheets API doesn't have a direct "get last row" if sheet is sparse.
+            // A common workaround is to get all data or a large range like A:Z.
+            const allDataResponse = await gapi.client.sheets.spreadsheets.values.get({
+                spreadsheetId: SPREADSHEET_ID,
+                range: `${sheetName}!A:BZ`, // Adjust range to cover all your columns
+            });
+
+            const allRows = allDataResponse.result.values;
+            if (!allRows || allRows.length < 2) { // Header + at least one data row
+                throw new Error(`No data found in ${sheetName}.`);
+            }
+            
+            // Find the last row with a valid date in the first column
+            let lastValidRowValues = null;
+            for (let i = allRows.length - 1; i >= 1; i--) { // Start from bottom, skip header
+                if (allRows[i] && allRows[i][0]) { // Check if row and date cell exist
+                    try {
+                        // Basic date validation (YYYY-MM-DD)
+                        if (String(allRows[i][0]).match(/^\d{4}-\d{2}-\d{2}$/)) {
+                           lastValidRowValues = allRows[i];
+                           break;
+                        }
+                    } catch (e) { /* ignore, try next row */ }
+                }
+            }
+
+            if (!lastValidRowValues) {
+                throw new Error(`No valid dated data row found in ${sheetName}.`);
+            }
+
+            const latestData = {};
+            headers.forEach((header, index) => {
+                latestData[header] = (lastValidRowValues && index < lastValidRowValues.length) ? lastValidRowValues[index] : null;
+            });
+            return latestData;
+        }
+
+        async function fetchDataFromSheets() {
+            try {
+                const macroDailyData = await fetchSheetData(MACRO_DAILY_SHEET_NAME);
+                const macroNarrativeData = await fetchSheetData(MACRO_NARRATIVE_SHEET_NAME);
+                
+                updateStatus("Data fetched. Populating infographic...");
+                populateInfographic(macroDailyData, macroNarrativeData);
+
+            } catch (err) {
+                updateStatus("Error fetching data: " + err.message + ". Check console for details.");
+                console.error("Error fetching data from sheets: ", err);
+                document.getElementById('auth-container').style.display = 'block';
+                document.getElementById('main-content').style.display = 'none';
+            }
+        }
+        
+        function populateInfographic(dailyData, narrativeData) {
+            if (!dailyData || !narrativeData) {
+                updateStatus("Could not populate infographic: Missing data from one or both sheets.");
+                return;
+            }
+            console.log("MacroDaily Data:", dailyData);
+            console.log("MacroNarrative Data:", narrativeData);
+
+            const getNum = (val, defaultVal = 0) => {
+                const num = parseFloat(String(val).replace('%', '')); // Handle potential '%'
+                return isNaN(num) ? defaultVal : num;
+            };
+            const getStr = (val, defaultVal = 'N/A') => (val !== undefined && val !== null && String(val).trim() !== "") ? String(val) : defaultVal;
+
+            const dataDate = getStr(dailyData['Date']);
+            document.getElementById('dataDate').textContent = `Key Trends & Insights as of ${dataDate}`;
+            document.getElementById('lastUpdated').textContent = getStr(narrativeData['Last_Updated'], new Date().toLocaleString());
+
+            // --- Populate MacroDaily Section ---
+            const mdMarketStatus = getStr(dailyData['Market_Status']);
+            const mdTotalPCSScore = getNum(dailyData['Total_PCS_Score']);
+            const mdPcsRecommendation = getStr(dailyData['PCS_Recommendation']);
+
+            document.getElementById('md_marketStatus').textContent = mdMarketStatus;
+            const mdScoreBar = document.getElementById('md_totalPCSScoreBar');
+            mdScoreBar.style.width = `${Math.max(0, Math.min(100, mdTotalPCSScore))}%`; // Cap at 0-100
+            mdScoreBar.textContent = `${mdTotalPCSScore.toFixed(0)}`;
+            mdScoreBar.className = `h-8 rounded-full text-sm flex items-center justify-center font-semibold text-white ${getScoreColor(mdTotalPCSScore)}`;
+            document.getElementById('md_pcsRecommendation').textContent = mdPcsRecommendation;
+
+            // --- Populate MacroNarrative Section ---
+            const mnDominantSentiment = getStr(narrativeData['Dominant_News_Sentiment']);
+            const mnFinalPCSScore = getNum(narrativeData['Final_PCS_Score']);
+            const mnNewsPCSSignal = getStr(narrativeData['News_PCS_Signal']);
+            const mnNewsContribution = getNum(narrativeData['News_Contribution']);
+
+            document.getElementById('mn_dominantNewsSentiment').textContent = mnDominantSentiment;
+            const mnScoreBar = document.getElementById('mn_finalPCSScoreBar');
+            mnScoreBar.style.width = `${Math.max(0, Math.min(100, mnFinalPCSScore))}%`;
+            mnScoreBar.textContent = `${mnFinalPCSScore.toFixed(0)}`;
+            mnScoreBar.className = `h-8 rounded-full text-sm flex items-center justify-center font-semibold text-white ${getScoreColor(mnFinalPCSScore, true)}`;
+            document.getElementById('mn_newsPCSSignal').textContent = mnNewsPCSSignal;
+            document.getElementById('mn_newsContribution').textContent = `${mnNewsContribution >= 0 ? '+' : ''}${mnNewsContribution.toFixed(0)}`;
+            document.getElementById('mn_newsContribution').className = mnNewsContribution >=0 ? 'text-green-600 text-lg' : 'text-red-600 text-lg';
+
+
+            // --- Market Internals & Sentiment ---
+            const sp500Close = getNum(dailyData['SP500_Close']);
+            const sp500Pullback = getNum(dailyData['SP500_Pullback_Pct']);
+            document.getElementById('md_sp500Close').textContent = sp500Close.toFixed(2);
+            const spPullbackEl = document.getElementById('md_sp500Pullback');
+            spPullbackEl.textContent = `${sp500Pullback.toFixed(2)}%`;
+            spPullbackEl.className = `kpi-value ${sp500Pullback < 0 ? 'text-red-500' : (sp500Pullback > 0 ? 'text-green-500' : 'text-gray-700')}`;
+
+            const vixClose = getNum(dailyData['VIX_Close']);
+            const vixRegime = getStr(dailyData['VIX_Regime']);
+            document.getElementById('md_vixClose').textContent = vixClose.toFixed(2);
+            document.getElementById('md_vixRegime').textContent = `REGIME: ${vixRegime}`;
+            setElementPillClass(document.getElementById('md_vixRegime'), vixRegime);
+
+
+            const pcrVolume = getNum(dailyData['PCR_Volume']);
+            const pcrRegime = getStr(dailyData['PCR_Regime']);
+            document.getElementById('md_pcrVolume').textContent = pcrVolume.toFixed(2);
+            document.getElementById('md_pcrRegime').textContent = `REGIME: ${pcrRegime}`;
+            setElementPillClass(document.getElementById('md_pcrRegime'), pcrRegime);
+
+
+            const advancePct = getNum(dailyData['Advance_Pct']);
+            document.getElementById('md_advancePct').textContent = `${advancePct.toFixed(1)}%`;
+
+            document.getElementById('mn_sentimentMomentum').textContent = getStr(narrativeData['Sentiment_Momentum']);
+             setElementPillClass(document.getElementById('mn_sentimentMomentum'), getStr(narrativeData['Sentiment_Momentum']));
+
+
+            // --- Economic & Rate Outlook ---
+            const tnxClose = getNum(dailyData['TNX_Close'] || dailyData['TNX_Yield']); // Handle potential column name diff
+            const tnxTrend = getStr(dailyData['TNX_Trend'] || dailyData['TNX_10D_Trend']);
+            document.getElementById('md_tnxClose').textContent = `${tnxClose.toFixed(2)}%`;
+            const tnxTrendEl = document.getElementById('md_tnxTrend');
+            tnxTrendEl.textContent = `TREND: ${tnxTrend}`;
+            setTrendArrow(tnxTrendEl, tnxTrend);
+            
+            const yieldCurve = getNum(dailyData['FRED_YieldCurve'] || dailyData['YieldCurve']);
+            const ycEl = document.getElementById('md_yieldCurve');
+            ycEl.textContent = `${yieldCurve > 0 ? '+' : ''}${yieldCurve.toFixed(2)}%`;
+            ycEl.className = `kpi-value ${yieldCurve < 0 ? 'text-red-500' : 'text-green-600'}`;
+            document.getElementById('md_yieldCurveDesc').textContent = yieldCurve < 0 ? 'Inverted' : (yieldCurve < 0.25 ? 'Flat' : 'Positive Slope');
+
+            document.getElementById('md_fedFunds').textContent = `${getNum(dailyData['FRED_FedFunds']).toFixed(2)}%`;
+            
+            const fsi = getNum(dailyData['FRED_FSI']);
+            const fsiEl = document.getElementById('md_fsi');
+            fsiEl.textContent = fsi.toFixed(2);
+            document.getElementById('md_fsiDesc').textContent = fsi > 0 ? 'Stress Above Avg' : (fsi < -0.5 ? 'Low Stress' : 'Stress Below Avg');
+            fsiEl.className = `kpi-value ${fsi > 0 ? 'text-red-500' : 'text-green-600'}`;
+
+            // --- News Headlines Overview ---
+            const topHeadlinesRaw = getStr(narrativeData['Top_3_Headlines_Combined']);
+            const headlinesListEl = document.getElementById('mn_topHeadlines');
+            headlinesListEl.innerHTML = ''; // Clear loading
+            if (topHeadlinesRaw !== 'N/A' && topHeadlinesRaw !== 'No headlines') {
+                topHeadlinesRaw.split(' | ').forEach(h => {
+                    const li = document.createElement('li');
+                    li.textContent = h;
+                    headlinesListEl.appendChild(li);
+                });
+            } else {
+                headlinesListEl.innerHTML = '<li>No significant headlines processed.</li>';
+            }
+            document.getElementById('mn_pcsRationale').textContent = getStr(narrativeData['PCS_Rationale']);
+            document.getElementById('mn_newsCount').textContent = getStr(narrativeData['News_Count_Total']);
+            document.getElementById('mn_panicCount').textContent = getStr(narrativeData['Panic_Headlines']);
+            document.getElementById('mn_bearishCount').textContent = getStr(narrativeData['Bearish_Headlines']);
+            document.getElementById('mn_aiMethod').textContent = getStr(narrativeData['AI_Analysis_Method']);
+
+
+            // --- Charts ---
+            const sp500_SMA50 = getNum(dailyData['SP500_SMA50']);
+            const sp500_SMA200 = getNum(dailyData['SP500_SMA200']);
+            if (sp500ChartInstance) sp500ChartInstance.destroy();
+            sp500ChartInstance = new Chart(document.getElementById('sp500Chart').getContext('2d'), {
+                type: 'bar', // Changed to bar to show current values against SMAs
+                data: {
+                    labels: ['S&P 500 Close', '50-Day SMA', '200-Day SMA'],
+                    datasets: [{
+                        label: 'Level',
+                        data: [sp500Close, sp500_SMA50, sp500_SMA200],
+                        backgroundColor: ['#1E40AF', '#3B82F6', '#93C5FD'], // Blue shades
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }}, scales: { y: { beginAtZero: false }} }
+            });
+
+            const nasdaqPullback = getNum(dailyData['NASDAQ_Pullback_Pct'] || dailyData['NASDAQ_Pullback']);
+            const djiPullback = getNum(dailyData['DJI_Pullback_Pct'] || dailyData['DJI_Pullback']);
+            const rutPullback = getNum(dailyData['RUT_Pullback_Pct'] || dailyData['RUT_Pullback']);
+            if (indicesPullbackChartInstance) indicesPullbackChartInstance.destroy();
+            indicesPullbackChartInstance = new Chart(document.getElementById('indicesPullbackChart').getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: ['S&P 500', 'NASDAQ', 'Dow Jones', 'Russell 2000'],
+                    datasets: [{
+                        label: 'Pullback from 10D High (%)',
+                        data: [sp500Pullback, nasdaqPullback, djiPullback, rutPullback],
+                        backgroundColor: ['#F59E0B', '#F97316', '#EA580C', '#D97706'] // Amber/Orange shades
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false }}, scales: {x: {title: {display:true, text:'%'}}} }
+            });
+            
+            updateStatus("Infographic populated successfully!");
+        }
+
+        function getScoreColor(score, isNarrative = false) {
+            if (score >= 80) return isNarrative ? 'bg-purple-700' : 'bg-green-700';
+            if (score >= 60) return isNarrative ? 'bg-purple-500' : 'bg-green-500';
+            if (score >= 40) return isNarrative ? 'bg-indigo-500' : 'bg-yellow-500';
+            return isNarrative ? 'bg-gray-500' : 'bg-red-500';
+        }
+
+        function setTrendArrow(element, trendText) {
+            let arrow = ' <span class="trend-arrow-flat">―</span>'; // Default flat
+            if (trendText.toUpperCase().includes("RISING")) arrow = ' <span class="trend-arrow-up">↑</span>';
+            else if (trendText.toUpperCase().includes("FALLING")) arrow = ' <span class="trend-arrow-down">↓</span>';
+            element.innerHTML += arrow;
+        }
+        
+        function setElementPillClass(element, textValue) {
+            textValue = String(textValue).toUpperCase();
+            let pillClass = 'pill-gray'; // Default
+            if (textValue.includes("OPPORTUNITY") || textValue.includes("OVERSOLD") || textValue.includes("GOOD") || textValue.includes("STRONG")) pillClass = 'pill-green';
+            else if (textValue.includes("AVOID") || textValue.includes("CRISIS") || textValue.includes("OVERBOUGHT") || textValue.includes("PANIC") || textValue.includes("BEARISH")) pillClass = 'pill-red';
+            else if (textValue.includes("MONITOR") || textValue.includes("UNCERTAIN") || text_value.includes("MODERATE")) pillClass = 'pill-yellow';
+            else if (textValue.includes("NEUTRAL") || textValue.includes("STABLE")) pillClass = 'pill-blue';
+            
+            element.className = `pill ${pillClass}`;
+        }
+
+        document.getElementById('currentYear').textContent = new Date().getFullYear();
+    </script>
+</body>
+</html>
