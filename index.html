@@ -18,16 +18,17 @@
         .auth-container { padding: 20px; background-color: #DBEAFE; /* Tailwind blue-100 */ border-radius: 8px; margin-bottom: 20px; text-align: center; }
         .auth-button { background-color: #1E40AF; /* Tailwind blue-800 */ color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 1rem; }
         .auth-button:hover { background-color: #1D4ED8; /* Tailwind blue-700 */ }
+        .auth-button:disabled { background-color: #9DB2BF; cursor: not-allowed; } /* Styling for disabled button */
         .status-message { margin-top: 10px; font-style: italic; color: #1E3A8A; /* Tailwind blue-900 */ }
         .trend-arrow-up { color: #10B981; /* Tailwind green-500 */ }
         .trend-arrow-down { color: #EF4444; /* Tailwind red-500 */ }
         .trend-arrow-flat { color: #6B7280; /* Tailwind gray-500 */ }
         .pill { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 500; }
-        .pill-green { background-color: #D1FAE5; color: #065F46; } /* Green 100/800 */
-        .pill-red { background-color: #FEE2E2; color: #991B1B; } /* Red 100/800 */
-        .pill-yellow { background-color: #FEF3C7; color: #92400E; } /* Amber 100/800 */
-        .pill-blue { background-color: #DBEAFE; color: #1E40AF; } /* Blue 100/800 */
-        .pill-gray { background-color: #E5E7EB; color: #374151; } /* Gray 200/700 */
+        .pill-green { background-color: #D1FAE5; color: #065F46; }
+        .pill-red { background-color: #FEE2E2; color: #991B1B; }
+        .pill-yellow { background-color: #FEF3C7; color: #92400E; }
+        .pill-blue { background-color: #DBEAFE; color: #1E40AF; }
+        .pill-gray { background-color: #E5E7EB; color: #374151; }
     </style>
 </head>
 <body class="antialiased text-gray-800">
@@ -38,12 +39,11 @@
         </header>
 
         <div id="auth-container">
-            <button id="auth-button" class="auth-button">Authorize and Load Data</button>
-            <p id="status" class="status-message">Please authorize to access Google Sheet data.</p>
+            <button id="auth-button" class="auth-button" disabled>Authorize and Load Data</button>
+            <p id="status" class="status-message">Initializing API libraries...</p>
         </div>
 
         <main id="main-content" style="display: none;" class="space-y-8">
-
             <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="card">
                     <h2 class="card-title">Macro PCS Outlook (from MacroDaily)</h2>
@@ -129,7 +129,7 @@
                 <h2 class="card-title">Economic & Rate Outlook</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-center">
                     <div>
-                        <p class="kpi-label">10Y Treasury Yield</p>
+                        <p class="kpi-label">10-Year Treasury Yield</p>
                         <p id="md_tnxClose" class="kpi-value">N/A</p>
                         <p id="md_tnxTrend" class="font-semibold">TREND: N/A</p>
                     </div>
@@ -194,9 +194,6 @@
         </footer>
     </div>
 
-    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
-    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
-
     <script>
         // --- Google API Configuration ---
         const GOOGLE_API_KEY = 'AIzaSyC9I9vinVaXWwohBWwv1I5HofHKxLtOwuY'; // REPLACE WITH YOUR Google Cloud API Key
@@ -211,75 +208,97 @@
         let tokenClient;
         let gapiInited = false;
         let gisInited = false;
-        let sp500ChartInstance, indicesPullbackChartInstance;
+        let sp500ChartInstance, indicesPullbackChartInstance; // Declare chart instances
 
-        document.getElementById('auth-button').addEventListener('click', () => {
-            if (gapiInited && gisInited) {
-                handleAuthClick();
-            } else {
-                updateStatus("API libraries not fully loaded. Please wait or refresh.");
-            }
-        });
-        
-        function gapiLoaded() { gapi.load('client', initializeGapiClient); }
-        function gisLoaded() {
-            tokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: GOOGLE_CLIENT_ID,
-                scope: SCOPES,
-                callback: '', // Will be set dynamically
-            });
-            gisInited = true;
-            updateStatus("Google Identity Services ready.");
-            maybeEnableAuthButton();
+        // --- Core Initialization Callbacks ---
+        function gapiLoaded() {
+            console.log("gapiLoaded called");
+            gapi.load('client', initializeGapiClient);
         }
 
         async function initializeGapiClient() {
+            console.log("initializeGapiClient called");
             try {
                 await gapi.client.init({ apiKey: GOOGLE_API_KEY, discoveryDocs: DISCOVERY_DOCS });
                 gapiInited = true;
                 updateStatus("Google API Client ready.");
+                console.log("GAPI client initialized.");
                 maybeEnableAuthButton();
             } catch (err) {
-                updateStatus("Error initializing Google API Client: " + err.message);
+                updateStatus("Error initializing Google API Client: " + err.message + ". Check API Key & restrictions.");
                 console.error("Error initializing GAPI client", err);
             }
         }
+
+        function gisLoaded() {
+            console.log("gisLoaded called");
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: GOOGLE_CLIENT_ID,
+                scope: SCOPES,
+                callback: '', // Will be set dynamically by handleAuthClick
+            });
+            gisInited = true;
+            updateStatus("Google Identity Services ready.");
+            console.log("GIS client initialized.");
+            maybeEnableAuthButton();
+        }
         
         function maybeEnableAuthButton() {
-            if (gapiInited && gisInited) {
-                document.getElementById('auth-button').disabled = false;
-                updateStatus("Ready to authorize access to Google Sheets.");
+            console.log(`maybeEnableAuthButton: gapiInited=${gapiInited}, gisInited=${gisInited}`);
+            const authButton = document.getElementById('auth-button');
+            if (authButton) {
+                if (gapiInited && gisInited) {
+                    authButton.disabled = false;
+                    updateStatus("Ready to authorize access to Google Sheets.");
+                    console.log("Auth button enabled.");
+                } else {
+                    authButton.disabled = true; // Keep it disabled if not ready
+                    // Status might already be set by individual init functions
+                    if (!gapiInited) console.log("Waiting for GAPI client...");
+                    if (!gisInited) console.log("Waiting for GIS client...");
+                }
+            } else {
+                console.error("Auth button not found in maybeEnableAuthButton.");
             }
         }
 
         function handleAuthClick() {
+            console.log("handleAuthClick called");
+            if (!gapiInited || !gisInited) {
+                 updateStatus("API libraries still initializing. Please wait a moment and try again.");
+                 console.warn("handleAuthClick called before full API initialization.");
+                 return;
+            }
             tokenClient.callback = async (resp) => {
                 if (resp.error !== undefined) {
-                    updateStatus("Auth Error: " + resp.error + ". Ensure pop-ups are allowed and try again.");
-                    console.error("Auth Error", resp);
-                    return; // Stop further processing on auth error
+                    updateStatus("Auth Error: " + resp.error + ". Ensure pop-ups allowed, valid Client ID & Redirect URIs.");
+                    console.error("Auth Error Response", resp);
+                    // Optionally, re-show auth container if auth fails critically
+                    // document.getElementById('auth-container').style.display = 'block';
+                    // document.getElementById('main-content').style.display = 'none';
+                    return; 
                 }
                 updateStatus("Authorization successful. Fetching data...");
                 document.getElementById('auth-container').style.display = 'none';
-                document.getElementById('main-content').style.display = 'grid'; // Or 'block' if top level is not grid
+                document.getElementById('main-content').style.display = 'grid'; 
                 await fetchDataFromSheets();
             };
             if (gapi.client.getToken() === null) {
                 tokenClient.requestAccessToken({prompt: 'consent'});
             } else {
-                tokenClient.requestAccessToken({prompt: ''}); // Skip consent if already authorized
+                tokenClient.requestAccessToken({prompt: ''}); 
             }
         }
 
         function updateStatus(message) {
             const statusEl = document.getElementById('status');
             if (statusEl) statusEl.textContent = message;
-            console.log("Status:", message);
+            console.log("Status Update:", message);
         }
 
         async function fetchSheetData(sheetName) {
             updateStatus(`Workspaceing data from ${sheetName}...`);
-            // Fetch headers
+            console.log(`Attempting to fetch headers from ${sheetName}!1:1`);
             const headerResponse = await gapi.client.sheets.spreadsheets.values.get({
                 spreadsheetId: SPREADSHEET_ID,
                 range: `${sheetName}!1:1`,
@@ -288,32 +307,27 @@
             if (headers.length === 0) {
                 throw new Error(`Could not read headers from ${sheetName}.`);
             }
+            console.log(`Headers for ${sheetName}:`, headers);
 
-            // Fetch all data rows (assuming data is reasonably sized or you want the very last row)
-            // For very large sheets, fetching only the last N rows would be better.
-            // GSheets API doesn't have a direct "get last row" if sheet is sparse.
-            // A common workaround is to get all data or a large range like A:Z.
+            console.log(`Attempting to fetch data from ${sheetName}!A:BZ`); // Or your max expected column
             const allDataResponse = await gapi.client.sheets.spreadsheets.values.get({
                 spreadsheetId: SPREADSHEET_ID,
-                range: `${sheetName}!A:BZ`, // Adjust range to cover all your columns
+                range: `${sheetName}!A:BZ`, 
             });
 
             const allRows = allDataResponse.result.values;
-            if (!allRows || allRows.length < 2) { // Header + at least one data row
-                throw new Error(`No data found in ${sheetName}.`);
+            if (!allRows || allRows.length < 2) { 
+                throw new Error(`No data rows found in ${sheetName} (expected header + data).`);
             }
             
-            // Find the last row with a valid date in the first column
             let lastValidRowValues = null;
-            for (let i = allRows.length - 1; i >= 1; i--) { // Start from bottom, skip header
-                if (allRows[i] && allRows[i][0]) { // Check if row and date cell exist
-                    try {
-                        // Basic date validation (YYYY-MM-DD)
-                        if (String(allRows[i][0]).match(/^\d{4}-\d{2}-\d{2}$/)) {
-                           lastValidRowValues = allRows[i];
-                           break;
-                        }
-                    } catch (e) { /* ignore, try next row */ }
+            for (let i = allRows.length - 1; i >= 1; i--) { 
+                if (allRows[i] && allRows[i][0]) { 
+                    if (String(allRows[i][0]).match(/^\d{4}-\d{2}-\d{2}$/)) {
+                       lastValidRowValues = allRows[i];
+                       console.log(`Found last valid row for ${sheetName} at index ${i} (1-based from sheet):`, lastValidRowValues);
+                       break;
+                    }
                 }
             }
 
@@ -323,13 +337,13 @@
 
             const latestData = {};
             headers.forEach((header, index) => {
-                latestData[header] = (lastValidRowValues && index < lastValidRowValues.length) ? lastValidRowValues[index] : null;
+                latestData[header] = (index < lastValidRowValues.length) ? lastValidRowValues[index] : null;
             });
             return latestData;
         }
 
         async function fetchDataFromSheets() {
-            try {
+             try {
                 const macroDailyData = await fetchSheetData(MACRO_DAILY_SHEET_NAME);
                 const macroNarrativeData = await fetchSheetData(MACRO_NARRATIVE_SHEET_NAME);
                 
@@ -337,7 +351,7 @@
                 populateInfographic(macroDailyData, macroNarrativeData);
 
             } catch (err) {
-                updateStatus("Error fetching data: " + err.message + ". Check console for details.");
+                updateStatus("Error fetching data: " + err.message + ". Check console.");
                 console.error("Error fetching data from sheets: ", err);
                 document.getElementById('auth-container').style.display = 'block';
                 document.getElementById('main-content').style.display = 'none';
@@ -346,14 +360,16 @@
         
         function populateInfographic(dailyData, narrativeData) {
             if (!dailyData || !narrativeData) {
-                updateStatus("Could not populate infographic: Missing data from one or both sheets.");
+                updateStatus("Could not populate: Missing data from MacroDaily or MacroNarrative.");
+                console.error("Populate Infographic Error: Missing dailyData or narrativeData", {dailyData, narrativeData});
                 return;
             }
-            console.log("MacroDaily Data:", dailyData);
-            console.log("MacroNarrative Data:", narrativeData);
+            console.log("Populating with MacroDaily:", dailyData);
+            console.log("Populating with MacroNarrative:", narrativeData);
 
             const getNum = (val, defaultVal = 0) => {
-                const num = parseFloat(String(val).replace('%', '')); // Handle potential '%'
+                if (val === null || val === undefined || String(val).trim() === "") return defaultVal;
+                const num = parseFloat(String(val).replace('%', ''));
                 return isNaN(num) ? defaultVal : num;
             };
             const getStr = (val, defaultVal = 'N/A') => (val !== undefined && val !== null && String(val).trim() !== "") ? String(val) : defaultVal;
@@ -362,35 +378,40 @@
             document.getElementById('dataDate').textContent = `Key Trends & Insights as of ${dataDate}`;
             document.getElementById('lastUpdated').textContent = getStr(narrativeData['Last_Updated'], new Date().toLocaleString());
 
-            // --- Populate MacroDaily Section ---
+            // MacroDaily Data
             const mdMarketStatus = getStr(dailyData['Market_Status']);
             const mdTotalPCSScore = getNum(dailyData['Total_PCS_Score']);
             const mdPcsRecommendation = getStr(dailyData['PCS_Recommendation']);
 
             document.getElementById('md_marketStatus').textContent = mdMarketStatus;
+            setElementPillClass(document.getElementById('md_marketStatus'), mdMarketStatus);
             const mdScoreBar = document.getElementById('md_totalPCSScoreBar');
-            mdScoreBar.style.width = `${Math.max(0, Math.min(100, mdTotalPCSScore))}%`; // Cap at 0-100
+            mdScoreBar.style.width = `${Math.max(0, Math.min(100, mdTotalPCSScore))}%`;
             mdScoreBar.textContent = `${mdTotalPCSScore.toFixed(0)}`;
             mdScoreBar.className = `h-8 rounded-full text-sm flex items-center justify-center font-semibold text-white ${getScoreColor(mdTotalPCSScore)}`;
             document.getElementById('md_pcsRecommendation').textContent = mdPcsRecommendation;
+            setElementPillClass(document.getElementById('md_pcsRecommendation'), mdPcsRecommendation);
 
-            // --- Populate MacroNarrative Section ---
+
+            // MacroNarrative Data
             const mnDominantSentiment = getStr(narrativeData['Dominant_News_Sentiment']);
             const mnFinalPCSScore = getNum(narrativeData['Final_PCS_Score']);
             const mnNewsPCSSignal = getStr(narrativeData['News_PCS_Signal']);
             const mnNewsContribution = getNum(narrativeData['News_Contribution']);
 
             document.getElementById('mn_dominantNewsSentiment').textContent = mnDominantSentiment;
+            setElementPillClass(document.getElementById('mn_dominantNewsSentiment'), mnDominantSentiment);
             const mnScoreBar = document.getElementById('mn_finalPCSScoreBar');
             mnScoreBar.style.width = `${Math.max(0, Math.min(100, mnFinalPCSScore))}%`;
             mnScoreBar.textContent = `${mnFinalPCSScore.toFixed(0)}`;
             mnScoreBar.className = `h-8 rounded-full text-sm flex items-center justify-center font-semibold text-white ${getScoreColor(mnFinalPCSScore, true)}`;
             document.getElementById('mn_newsPCSSignal').textContent = mnNewsPCSSignal;
+            setElementPillClass(document.getElementById('mn_newsPCSSignal'), mnNewsPCSSignal);
+
             document.getElementById('mn_newsContribution').textContent = `${mnNewsContribution >= 0 ? '+' : ''}${mnNewsContribution.toFixed(0)}`;
             document.getElementById('mn_newsContribution').className = mnNewsContribution >=0 ? 'text-green-600 text-lg' : 'text-red-600 text-lg';
 
-
-            // --- Market Internals & Sentiment ---
+            // Market Internals & Sentiment
             const sp500Close = getNum(dailyData['SP500_Close']);
             const sp500Pullback = getNum(dailyData['SP500_Pullback_Pct']);
             document.getElementById('md_sp500Close').textContent = sp500Close.toFixed(2);
@@ -401,26 +422,25 @@
             const vixClose = getNum(dailyData['VIX_Close']);
             const vixRegime = getStr(dailyData['VIX_Regime']);
             document.getElementById('md_vixClose').textContent = vixClose.toFixed(2);
-            document.getElementById('md_vixRegime').textContent = `REGIME: ${vixRegime}`;
-            setElementPillClass(document.getElementById('md_vixRegime'), vixRegime);
-
+            document.getElementById('md_vixRegime').textContent = vixRegime; // Changed to set text directly
+            setElementPillClass(document.getElementById('md_vixRegime'), vixRegime); // Then apply pill class
 
             const pcrVolume = getNum(dailyData['PCR_Volume']);
             const pcrRegime = getStr(dailyData['PCR_Regime']);
             document.getElementById('md_pcrVolume').textContent = pcrVolume.toFixed(2);
-            document.getElementById('md_pcrRegime').textContent = `REGIME: ${pcrRegime}`;
-            setElementPillClass(document.getElementById('md_pcrRegime'), pcrRegime);
-
+            document.getElementById('md_pcrRegime').textContent = pcrRegime; // Changed
+            setElementPillClass(document.getElementById('md_pcrRegime'), pcrRegime); // Then apply pill class
 
             const advancePct = getNum(dailyData['Advance_Pct']);
             document.getElementById('md_advancePct').textContent = `${advancePct.toFixed(1)}%`;
 
-            document.getElementById('mn_sentimentMomentum').textContent = getStr(narrativeData['Sentiment_Momentum']);
-             setElementPillClass(document.getElementById('mn_sentimentMomentum'), getStr(narrativeData['Sentiment_Momentum']));
+            const sentimentMomentum = getStr(narrativeData['Sentiment_Momentum']);
+            document.getElementById('mn_sentimentMomentum').textContent = sentimentMomentum; // Changed
+            setElementPillClass(document.getElementById('mn_sentimentMomentum'), sentimentMomentum); // Then apply
 
 
-            // --- Economic & Rate Outlook ---
-            const tnxClose = getNum(dailyData['TNX_Close'] || dailyData['TNX_Yield']); // Handle potential column name diff
+            // Economic & Rate Outlook
+            const tnxClose = getNum(dailyData['TNX_Close'] || dailyData['TNX_Yield']);
             const tnxTrend = getStr(dailyData['TNX_Trend'] || dailyData['TNX_10D_Trend']);
             document.getElementById('md_tnxClose').textContent = `${tnxClose.toFixed(2)}%`;
             const tnxTrendEl = document.getElementById('md_tnxTrend');
@@ -429,26 +449,26 @@
             
             const yieldCurve = getNum(dailyData['FRED_YieldCurve'] || dailyData['YieldCurve']);
             const ycEl = document.getElementById('md_yieldCurve');
-            ycEl.textContent = `${yieldCurve > 0 ? '+' : ''}${yieldCurve.toFixed(2)}%`;
+            ycEl.textContent = `${yieldCurve >= 0 ? '+' : ''}${yieldCurve.toFixed(2)}%`; // Ensure + for positive too
             ycEl.className = `kpi-value ${yieldCurve < 0 ? 'text-red-500' : 'text-green-600'}`;
-            document.getElementById('md_yieldCurveDesc').textContent = yieldCurve < 0 ? 'Inverted' : (yieldCurve < 0.25 ? 'Flat' : 'Positive Slope');
+            document.getElementById('md_yieldCurveDesc').textContent = yieldCurve < 0 ? 'Inverted' : (yieldCurve < 0.15 ? 'Flat' : 'Positive Slope'); // Adjusted flat threshold
 
             document.getElementById('md_fedFunds').textContent = `${getNum(dailyData['FRED_FedFunds']).toFixed(2)}%`;
             
             const fsi = getNum(dailyData['FRED_FSI']);
             const fsiEl = document.getElementById('md_fsi');
             fsiEl.textContent = fsi.toFixed(2);
-            document.getElementById('md_fsiDesc').textContent = fsi > 0 ? 'Stress Above Avg' : (fsi < -0.5 ? 'Low Stress' : 'Stress Below Avg');
+            document.getElementById('md_fsiDesc').textContent = fsi > 0.5 ? 'High Stress' : (fsi > 0 ? 'Above Avg Stress': (fsi < -0.5 ? 'Low Stress' : 'Below Avg Stress'));
             fsiEl.className = `kpi-value ${fsi > 0 ? 'text-red-500' : 'text-green-600'}`;
 
-            // --- News Headlines Overview ---
+            // News Headlines Overview
             const topHeadlinesRaw = getStr(narrativeData['Top_3_Headlines_Combined']);
             const headlinesListEl = document.getElementById('mn_topHeadlines');
-            headlinesListEl.innerHTML = ''; // Clear loading
+            headlinesListEl.innerHTML = '';
             if (topHeadlinesRaw !== 'N/A' && topHeadlinesRaw !== 'No headlines') {
                 topHeadlinesRaw.split(' | ').forEach(h => {
                     const li = document.createElement('li');
-                    li.textContent = h;
+                    li.textContent = h.trim();
                     headlinesListEl.appendChild(li);
                 });
             } else {
@@ -460,19 +480,17 @@
             document.getElementById('mn_bearishCount').textContent = getStr(narrativeData['Bearish_Headlines']);
             document.getElementById('mn_aiMethod').textContent = getStr(narrativeData['AI_Analysis_Method']);
 
-
-            // --- Charts ---
+            // Charts
             const sp500_SMA50 = getNum(dailyData['SP500_SMA50']);
             const sp500_SMA200 = getNum(dailyData['SP500_SMA200']);
             if (sp500ChartInstance) sp500ChartInstance.destroy();
             sp500ChartInstance = new Chart(document.getElementById('sp500Chart').getContext('2d'), {
-                type: 'bar', // Changed to bar to show current values against SMAs
+                type: 'bar', 
                 data: {
                     labels: ['S&P 500 Close', '50-Day SMA', '200-Day SMA'],
                     datasets: [{
-                        label: 'Level',
-                        data: [sp500Close, sp500_SMA50, sp500_SMA200],
-                        backgroundColor: ['#1E40AF', '#3B82F6', '#93C5FD'], // Blue shades
+                        label: 'Level', data: [sp500Close, sp500_SMA50, sp500_SMA200],
+                        backgroundColor: ['#1E40AF', '#3B82F6', '#BFDBFE'], 
                     }]
                 },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }}, scales: { y: { beginAtZero: false }} }
@@ -489,41 +507,63 @@
                     datasets: [{
                         label: 'Pullback from 10D High (%)',
                         data: [sp500Pullback, nasdaqPullback, djiPullback, rutPullback],
-                        backgroundColor: ['#F59E0B', '#F97316', '#EA580C', '#D97706'] // Amber/Orange shades
+                        backgroundColor: ['#059669', '#047857', '#065F46', '#064E3B'] // Green shades
                     }]
                 },
                 options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false }}, scales: {x: {title: {display:true, text:'%'}}} }
             });
             
             updateStatus("Infographic populated successfully!");
+            console.log("Infographic population complete.");
         }
 
         function getScoreColor(score, isNarrative = false) {
-            if (score >= 80) return isNarrative ? 'bg-purple-700' : 'bg-green-700';
-            if (score >= 60) return isNarrative ? 'bg-purple-500' : 'bg-green-500';
-            if (score >= 40) return isNarrative ? 'bg-indigo-500' : 'bg-yellow-500';
-            return isNarrative ? 'bg-gray-500' : 'bg-red-500';
+            score = Number(score);
+            if (score >= 80) return isNarrative ? 'bg-purple-700' : 'bg-green-700'; // Darkest positive
+            if (score >= 60) return isNarrative ? 'bg-purple-500' : 'bg-green-500'; // Positive
+            if (score >= 40) return isNarrative ? 'bg-indigo-400' : 'bg-yellow-500'; // Neutral / Caution
+            return isNarrative ? 'bg-gray-500' : 'bg-red-500'; // Negative / Avoid
         }
 
         function setTrendArrow(element, trendText) {
-            let arrow = ' <span class="trend-arrow-flat">―</span>'; // Default flat
-            if (trendText.toUpperCase().includes("RISING")) arrow = ' <span class="trend-arrow-up">↑</span>';
-            else if (trendText.toUpperCase().includes("FALLING")) arrow = ' <span class="trend-arrow-down">↓</span>';
-            element.innerHTML += arrow;
+            if(!element) return;
+            element.innerHTML = `TREND: ${getStr(trendText, 'N/A')}`; // Clear previous arrow by resetting innerHTML
+            let arrowSpan = document.createElement('span');
+            arrowSpan.className = 'ml-1'; // Add some margin
+            let arrow = ' <span class="trend-arrow-flat">―</span>'; 
+            if (String(trendText).toUpperCase().includes("RISING")) arrow = ' <span class="trend-arrow-up">↑</span>';
+            else if (String(trendText).toUpperCase().includes("FALLING")) arrow = ' <span class="trend-arrow-down">↓</span>';
+            arrowSpan.innerHTML = arrow;
+            element.appendChild(arrowSpan);
         }
         
         function setElementPillClass(element, textValue) {
+            if (!element) return;
+            let originalText = getStr(textValue); // Get the text before changing class
             textValue = String(textValue).toUpperCase();
-            let pillClass = 'pill-gray'; // Default
-            if (textValue.includes("OPPORTUNITY") || textValue.includes("OVERSOLD") || textValue.includes("GOOD") || textValue.includes("STRONG")) pillClass = 'pill-green';
-            else if (textValue.includes("AVOID") || textValue.includes("CRISIS") || textValue.includes("OVERBOUGHT") || textValue.includes("PANIC") || textValue.includes("BEARISH")) pillClass = 'pill-red';
-            else if (textValue.includes("MONITOR") || textValue.includes("UNCERTAIN") || text_value.includes("MODERATE")) pillClass = 'pill-yellow';
-            else if (textValue.includes("NEUTRAL") || textValue.includes("STABLE")) pillClass = 'pill-blue';
+            let pillClass = 'pill-gray'; 
+            if (textValue.includes("OPPORTUNITY") || textValue.includes("OVERSOLD") || textValue.includes("GOOD") || textValue.includes("STRONG") || textValue.includes("BUY") || textValue.includes("DECELERATING_BEARISH") ) pillClass = 'pill-green';
+            else if (textValue.includes("AVOID") || textValue.includes("CRISIS") || textValue.includes("OVERBOUGHT") || textValue.includes("PANIC") || textValue.includes("BEARISH") || textValue.includes("UNFAVORABLE") || textValue.includes("ACCELERATING_BEARISH")) pillClass = 'pill-red';
+            else if (textValue.includes("MONITOR") || textValue.includes("UNCERTAIN") || textValue.includes("MODERATE") || textValue.includes("HOLD")) pillClass = 'pill-yellow';
+            else if (textValue.includes("NEUTRAL") || textValue.includes("STABLE") || textValue.includes("FLAT") || textValue.includes("STEADY")) pillClass = 'pill-blue';
             
             element.className = `pill ${pillClass}`;
+            element.textContent = originalText; // Set text content after class
         }
+        
+        document.addEventListener('DOMContentLoaded', (event) => {
+            const authButton = document.getElementById('auth-button');
+            if(authButton) { authButton.disabled = true; }
+            const yearEl = document.getElementById('currentYear');
+            if(yearEl) { yearEl.textContent = new Date().getFullYear(); }
+            console.log("DOM fully loaded and parsed. Auth button disabled.");
+            updateStatus("Please wait for API libraries to initialize..."); // Initial status
+        });
 
-        document.getElementById('currentYear').textContent = new Date().getFullYear();
     </script>
+
+    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+
 </body>
 </html>
